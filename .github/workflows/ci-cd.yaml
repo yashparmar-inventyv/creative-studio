@@ -1,0 +1,53 @@
+name: Creative Studio CI Pipeline with GitHub Actions
+
+on:
+  push:
+    branches:
+      - master
+
+env:
+  REGISTRY: demo.goharbor.io
+  PROJECT: creative-studio
+  IMAGE_NAME: creative-studio
+
+jobs:
+  build:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set image tag
+        run: echo "IMAGE_TAG=${GITHUB_SHA}" >> $GITHUB_ENV
+
+      - name: Login to Harbor
+        run: |
+          echo "${{ secrets.HARBOR_PASSWORD }}" | docker login $REGISTRY \
+            -u "${{ secrets.HARBOR_USERNAME }}" --password-stdin
+
+      - name: Build Docker image
+        run: |
+          docker build -t $REGISTRY/$PROJECT/$IMAGE_NAME:${IMAGE_TAG} .
+
+      - name: Push Docker image
+        run: |
+          docker push $REGISTRY/$PROJECT/$IMAGE_NAME:${IMAGE_TAG}
+
+      - name: Get image digest
+        run: |
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $REGISTRY/$PROJECT/$IMAGE_NAME:${IMAGE_TAG} | cut -d'@' -f2)
+          echo "IMAGE_DIGEST=$DIGEST" >> $GITHUB_ENV
+          echo "Digest is $DIGEST"
+
+      - name: Trigger CD pipeline
+        run: |
+          curl -X POST https://api.github.com/repos/DenisRuparel/Timoni-implementation---DevOps/dispatches \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer ${{ secrets.REPO_TOKEN }}" \
+          -d '{
+            "event_type": "update-image",
+            "client_payload": {
+              "image_digest": "'${IMAGE_DIGEST}'"
+            }
+          }'

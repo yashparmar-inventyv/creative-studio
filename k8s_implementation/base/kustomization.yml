@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: creative-studio
+
+resources:
+  - deployment.yaml
+  - service.yaml
+  - networkpolicy-deny-all.yaml
+  - networkpolicy-allow-app-ingress.yaml
+  - networkpolicy-allow-egress.yaml
+
+#secretGenerator:
+#  - name: creative-studio-secrets
+#    envs:
+#      - .env.secret
+
+generatorOptions:
+  disableNameSuffixHash: true

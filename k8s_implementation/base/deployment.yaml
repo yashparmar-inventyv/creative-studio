@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: creative-studio
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: creative-studio
+  template:
+    metadata:
+      labels:
+        app: creative-studio
+    spec:
+      imagePullSecrets:
+        - name: harbor-secret
+      containers:
+        - name: creative-studio
+          image: demo.goharbor.io/creative-studio/creative-studio@sha256:eb6c829029d7d1634d61287b6d83eeb32f58998e6aad55cdeb198de27aef39e7
+          ports:
+            - containerPort: 5000
+#          envFrom:
+#            - secretRef:
+#                name: creative-studio-secrets

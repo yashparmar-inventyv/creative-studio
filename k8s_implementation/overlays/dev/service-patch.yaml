@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: creative-studio-service
+spec:
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 3000
+      nodePort: 32001
+      protocol: TCP
+  type: NodePort
