@@ -39,15 +39,15 @@ jobs:
           token: ${{ secrets.GITOPS_REPO_TOKEN }}
           path: gitops-repo
 
-      - name: Update SHA in Timoni Values
+      - name: Update Tag in Timoni Values
         run: |
           cd gitops-repo
-          # This search for the 'digest:' line and replaces the sha256 value
-          # We use a control character or different delimiter if the SHA contains slashes
-          sed -i 's/digest:  *"sha256:[a-zA-Z0-9]*"/digest:  "sha256:${{ github.sha }}"/' modules/creative-studio/values-beta.cue
+          # Target the tag line and clear the digest line to avoid conflicts
+          sed -i 's/tag:  *".*"/tag:  "${{ github.sha }}"/' modules/creative-studio/values-beta.cue
+          sed -i 's/digest:  *".*"/digest:  ""/' modules/creative-studio/values-beta.cue
           
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git add .
-          git commit -m "chore: update beta digest to ${{ github.sha }}"
+          git commit -m "chore: update image tag to ${{ github.sha }}"
           git push
