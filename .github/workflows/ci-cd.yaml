@@ -18,16 +18,17 @@ jobs:
       - name: Login to Harbor
         uses: docker/login-action@v3
         with:
-          registry: demo.goharbor.io # Change to your Harbor URL
+          registry: demo.goharbor.io
           username: ${{ secrets.HARBOR_USERNAME }}
           password: ${{ secrets.HARBOR_PASSWORD }}
 
       - name: Build and Push to Harbor
+        id: docker_build  # CRITICAL: We need this ID to capture the digest
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          # Tags the image with the unique GitHub SHA
+          # We tag it with github.sha, but we will deploy using the Digest for security
           tags: |
             demo.goharbor.io/creative-studio-app/creative-studio-app:${{ github.sha }}
             demo.goharbor.io/creative-studio-app/creative-studio-app:latest
@@ -35,19 +36,33 @@ jobs:
       - name: Checkout GitOps Repo
         uses: actions/checkout@v4
         with:
-          repository: yashparmar-inventyv/Timoni-creative-studio # Change to your 2nd repo
+          repository: yashparmar-inventyv/Timoni-creative-studio
           token: ${{ secrets.GITOPS_REPO_TOKEN }}
           path: gitops-repo
 
-      - name: Update Tag in Timoni Values
+      - name: Update Digest in Timoni Values
         run: |
+          # Capture the 64-character SHA256 digest from the build step
+          HARBOR_DIGEST="${{ steps.docker_build.outputs.digest }}"
+          echo "The Harbor Digest is: $HARBOR_DIGEST"
+
           cd gitops-repo
-          # Target the tag line and clear the digest line to avoid conflicts
-          sed -i 's/tag:  *".*"/tag:  "${{ github.sha }}"/' modules/creative-studio/values-beta.cue
-          sed -i 's/digest:  *".*"/digest:  ""/' modules/creative-studio/values-beta.cue
           
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git add .
-          git commit -m "chore: update image tag to ${{ github.sha }}"
-          git push
+          # 1. Update the digest line with the REAL Harbor SHA
+          # 2. Clear the tag line to ensure Timoni uses the Digest
+          sed -i "s|digest:.*|digest:  \"$HARBOR_DIGEST\"|g" modules/creative-studio/values-beta.cue
+          sed -i 's/tag:  *".*"/tag:  ""/g' modules/creative-studio/values-beta.cue
+          
+          # Git operations
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add modules/creative-studio/values-beta.cue
+          
+          # Only push if changes were made
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update image digest to $HARBOR_DIGEST"
+            git push
+          fi
