@@ -29,13 +29,13 @@ jobs:
           push: true
           # Tags the image with the unique GitHub SHA
           tags: |
-            harbor.yourdomain.com/my-project/app:${{ github.sha }}
-            harbor.yourdomain.com/my-project/app:latest
+            demo.goharbor.io/creative-studio-app/creative-studio-app:${{ github.sha }}
+            demo.goharbor.io/creative-studio-app/creative-studio-app:latest
 
       - name: Checkout GitOps Repo
         uses: actions/checkout@v4
         with:
-          repository: your-username/gitops-repo-name # Change to your 2nd repo
+          repository: yashparmar-inventyv/Timoni-creative-studio # Change to your 2nd repo
           token: ${{ secrets.GITOPS_REPO_TOKEN }}
           path: gitops-repo
 
