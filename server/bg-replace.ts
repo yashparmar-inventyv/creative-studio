@@ -52,7 +52,7 @@ export const replaceBackground = actionClient
     }
 
     if (!isProcessed) {
-      throw new Error("Image processing timed out")
+      throw new Error("Image processing timed out Please Try again....")
     }
     console.log(bgReplaceUrl)
     return { success: bgReplaceUrl }
