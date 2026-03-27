@@ -1,53 +1,53 @@
-name: Creative Studio CI Pipeline with GitHub Actions
+name: CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - master
-
-env:
-  REGISTRY: demo.goharbor.io
-  PROJECT: creative-studio
-  IMAGE_NAME: creative-studio
+    branches: [ "main" ]
 
 jobs:
-  build:
-    runs-on: self-hosted
-
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
     steps:
-      - name: Checkout code
+      - name: Checkout Project Code
         uses: actions/checkout@v4
 
-      - name: Set image tag
-        run: echo "IMAGE_TAG=${GITHUB_SHA}" >> $GITHUB_ENV
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to Harbor
-        run: |
-          echo "${{ secrets.HARBOR_PASSWORD }}" | docker login $REGISTRY \
-            -u "${{ secrets.HARBOR_USERNAME }}" --password-stdin
+        uses: docker/login-action@v3
+        with:
+          registry: demo.goharbor.io # Change to your Harbor URL
+          username: ${{ secrets.HARBOR_USERNAME }}
+          password: ${{ secrets.HARBOR_PASSWORD }}
 
-      - name: Build Docker image
-        run: |
-          docker build -t $REGISTRY/$PROJECT/$IMAGE_NAME:${IMAGE_TAG} .
+      - name: Build and Push to Harbor
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          # Tags the image with the unique GitHub SHA
+          tags: |
+            harbor.yourdomain.com/my-project/app:${{ github.sha }}
+            harbor.yourdomain.com/my-project/app:latest
 
-      - name: Push Docker image
-        run: |
-          docker push $REGISTRY/$PROJECT/$IMAGE_NAME:${IMAGE_TAG}
+      - name: Checkout GitOps Repo
+        uses: actions/checkout@v4
+        with:
+          repository: your-username/gitops-repo-name # Change to your 2nd repo
+          token: ${{ secrets.GITOPS_REPO_TOKEN }}
+          path: gitops-repo
 
-      - name: Get image digest
+      - name: Update SHA in Timoni Values
         run: |
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $REGISTRY/$PROJECT/$IMAGE_NAME:${IMAGE_TAG} | cut -d'@' -f2)
-          echo "IMAGE_DIGEST=$DIGEST" >> $GITHUB_ENV
-          echo "Digest is $DIGEST"
-
-      - name: Trigger CD pipeline
-        run: |
-          curl -X POST https://api.github.com/repos/DenisRuparel/Timoni-implementation---DevOps/dispatches \
-          -H "Accept: application/vnd.github+json" \
-          -H "Authorization: Bearer ${{ secrets.REPO_TOKEN }}" \
-          -d '{
-            "event_type": "update-image",
-            "client_payload": {
-              "image_digest": "'${IMAGE_DIGEST}'"
-            }
-          }'
+          cd gitops-repo
+          # This search for the 'digest:' line and replaces the sha256 value
+          # We use a control character or different delimiter if the SHA contains slashes
+          sed -i 's/digest:  *"sha256:[a-zA-Z0-9]*"/digest:  "sha256:${{ github.sha }}"/' modules/creative-studio/values-beta.cue
+          
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add .
+          git commit -m "chore: update beta digest to ${{ github.sha }}"
+          git push
