@@ -7,13 +7,20 @@ on:
 jobs:
   build-and-deploy:
     runs-on: self-hosted
-    
+
     steps:
       - name: Checkout Project Code
         uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          # This tells Buildx to use HTTP instead of HTTPS for your Harbor IP
+          driver-opts: image=moby/buildkit:master
+          config-inline: |
+            [registry."13.206.68.218"]
+              http = true
+              insecure = true
 
       - name: Login to Harbor
         uses: docker/login-action@v3
@@ -23,12 +30,12 @@ jobs:
           password: ${{ secrets.HARBOR_PASSWORD }}
 
       - name: Build and Push to Harbor
-        id: docker_build  # CRITICAL: We need this ID to capture the digest
+        id: docker_build
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          # We tag it with github.sha, but we will deploy using the Digest for security
+          # Note: Harbor requires the project 'creative-studio-app' to exist in the UI
           tags: |
             13.206.68.218/creative-studio-app/creative-studio-app:${{ github.sha }}
             13.206.68.218/creative-studio-app/creative-studio-app:latest
@@ -45,7 +52,7 @@ jobs:
           # Capture the 64-character SHA256 digest from the build step
           HARBOR_DIGEST="${{ steps.docker_build.outputs.digest }}"
           echo "The Harbor Digest is: $HARBOR_DIGEST"
-
+          
           cd gitops-repo
           
           # 1. Update the digest line with the REAL Harbor SHA
