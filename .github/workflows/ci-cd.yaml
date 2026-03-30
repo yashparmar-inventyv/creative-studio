@@ -18,7 +18,7 @@ jobs:
       - name: Login to Harbor
         uses: docker/login-action@v3
         with:
-          registry: 10.160.0.4
+          registry: 32.200.235.204
           username: ${{ secrets.HARBOR_USERNAME }}
           password: ${{ secrets.HARBOR_PASSWORD }}
 
@@ -30,8 +30,8 @@ jobs:
           push: true
           # We tag it with github.sha, but we will deploy using the Digest for security
           tags: |
-            10.160.0.4/creative-studio-app/creative-studio-app:${{ github.sha }}
-            10.160.0.4/creative-studio-app/creative-studio-app:latest
+            32.200.235.204/creative-studio-app/creative-studio-app:${{ github.sha }}
+            32.200.235.204/creative-studio-app/creative-studio-app:latest
 
       - name: Checkout GitOps Repo
         uses: actions/checkout@v4
