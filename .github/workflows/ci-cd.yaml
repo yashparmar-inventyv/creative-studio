@@ -2,7 +2,7 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "beta" ]
 
 jobs:
   build-and-deploy:
@@ -37,8 +37,8 @@ jobs:
           push: true
           # Note: Harbor requires the project 'creative-studio-app' to exist in the UI
           tags: |
-            13.200.24.3/creative-studio-app/creative-studio-prod:${{ github.sha }}
-            13.200.24.3/creative-studio-app/creative-studio-prod:latest
+            13.200.24.3/creative-studio-app/creative-studio-beta:${{ github.sha }}
+            13.200.24.3/creative-studio-app/creative-studio-beta:latest
 
       - name: Checkout GitOps Repo
         uses: actions/checkout@v4
@@ -57,8 +57,8 @@ jobs:
           
           # 1. Update the digest line with the REAL Harbor SHA
           # 2. Clear the tag line to ensure Timoni uses the Digest
-          sed -i "s|digest:.*|digest:  \"$HARBOR_DIGEST\"|g" modules/creative-studio/values-prod.cue
-          sed -i 's/tag:  *".*"/tag:  ""/g' modules/creative-studio/values-prod.cue
+          sed -i "s|digest:.*|digest:  \"$HARBOR_DIGEST\"|g" modules/creative-studio/values-beta.cue
+          sed -i 's/tag:  *".*"/tag:  ""/g' modules/creative-studio/values-beta.cue
           
           # Git operations
           git config user.name "github-actions[bot]"
