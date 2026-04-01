@@ -18,14 +18,14 @@ jobs:
           # This tells Buildx to use HTTP instead of HTTPS for your Harbor IP
           driver-opts: image=moby/buildkit:master
           config-inline: |
-            [registry."13.127.52.201"]
+            [registry."13.200.24.3"]
               http = true
               insecure = true
 
       - name: Login to Harbor
         uses: docker/login-action@v3
         with:
-          registry: 13.127.52.201
+          registry: 13.200.24.3
           username: ${{ secrets.HARBOR_USERNAME }}
           password: ${{ secrets.HARBOR_PASSWORD }}
 
@@ -37,8 +37,8 @@ jobs:
           push: true
           # Note: Harbor requires the project 'creative-studio-app' to exist in the UI
           tags: |
-            13.127.52.201/creative-studio-app/creative-studio-app:${{ github.sha }}
-            13.127.52.201/creative-studio-app/creative-studio-app:latest
+            13.200.24.3/creative-studio-app/creative-studio-app:${{ github.sha }}
+            13.200.24.3/creative-studio-app/creative-studio-app:latest
 
       - name: Checkout GitOps Repo
         uses: actions/checkout@v4
