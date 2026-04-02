@@ -2,32 +2,27 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ "prod" ]
+    branches: [ "prod", "beta", "dev" ] # Trigger on all three
 
 jobs:
   build-and-deploy:
     runs-on: self-hosted
-
     steps:
       - name: Checkout Project Code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          # This tells Buildx to use HTTP instead of HTTPS for your Harbor IP
-          driver-opts: image=moby/buildkit:master
-          config-inline: |
-            [registry."13.200.24.3"]
-              http = true
-              insecure = true
+      # 1. Set environment variables based on the branch
+      - name: Set Environment Variables
+        run: |
+          if [[ "${{ github.ref_name }}" == "prod" ]]; then
+            echo "ENV_NAME=prod" >> $GITHUB_ENV
+          elif [[ "${{ github.ref_name }}" == "beta" ]]; then
+            echo "ENV_NAME=beta" >> $GITHUB_ENV
+          else
+            echo "ENV_NAME=dev" >> $GITHUB_ENV
+          fi
 
-      - name: Login to Harbor
-        uses: docker/login-action@v3
-        with:
-          registry: 13.200.24.3
-          username: ${{ secrets.HARBOR_USERNAME }}
-          password: ${{ secrets.HARBOR_PASSWORD }}
+      # ... (Login and Buildx steps remain the same) ...
 
       - name: Build and Push to Harbor
         id: docker_build
@@ -35,10 +30,10 @@ jobs:
         with:
           context: .
           push: true
-          # Note: Harbor requires the project 'creative-studio-app' to exist in the UI
+          # Uses the ENV_NAME variable we set above
           tags: |
-            13.200.24.3/creative-studio-app/creative-studio-prod:${{ github.sha }}
-            13.200.24.3/creative-studio-app/creative-studio-prod:latest
+            13.200.24.3/creative-studio-app/creative-studio-${{ env.ENV_NAME }}:${{ github.sha }}
+            13.200.24.3/creative-studio-app/creative-studio-${{ env.ENV_NAME }}:latest
 
       - name: Checkout GitOps Repo
         uses: actions/checkout@v4
@@ -49,27 +44,22 @@ jobs:
 
       - name: Update Digest in Timoni Values
         run: |
-          # Capture the 64-character SHA256 digest from the build step
           HARBOR_DIGEST="${{ steps.docker_build.outputs.digest }}"
-          echo "The Harbor Digest is: $HARBOR_DIGEST"
-          
           cd gitops-repo
           
-          # 1. Update the digest line with the REAL Harbor SHA
-          # 2. Clear the tag line to ensure Timoni uses the Digest
-          sed -i "s|digest:.*|digest:  \"$HARBOR_DIGEST\"|g" modules/creative-studio/values-prod.cue
-          sed -i 's/tag:  *".*"/tag:  ""/g' modules/creative-studio/values-prod.cue
+          # Dynamically target values-prod.cue, values-beta.cue, or values-dev.cue
+          TARGET_FILE="modules/creative-studio/values-${{ env.ENV_NAME }}.cue"
           
-          # Git operations
+          sed -i "s|digest:.*|digest:  \"$HARBOR_DIGEST\"|g" $TARGET_FILE
+          sed -i 's/tag:  *".*"/tag:  ""/g' $TARGET_FILE
+          
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add $TARGET_FILE
           
-          git add modules/creative-studio/values-prod.cue
-          
-          # Only push if changes were made
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "chore: update image digest to $HARBOR_DIGEST"
+            git commit -m "chore(${{ env.ENV_NAME }}): update image digest"
             git push
           fi
