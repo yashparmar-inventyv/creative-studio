@@ -1,8 +1,8 @@
-name: Dev CI/CD
+name: Beta CI/CD
 
 on:
   push:
-    branches: [ "dev" ]
+    branches: [ "beta" ]
 
 jobs:
   build-and-deploy:
@@ -34,8 +34,8 @@ jobs:
           context: .
           push: true
           tags: |
-            13.200.24.3/creative-studio-app/creative-studio-dev:${{ github.sha }}
-            13.200.24.3/creative-studio-app/creative-studio-dev:latest
+            13.200.24.3/creative-studio-app/creative-studio-beta:${{ github.sha }}
+            13.200.24.3/creative-studio-app/creative-studio-beta:latest
 
       - name: Checkout GitOps Repo
         uses: actions/checkout@v4
@@ -48,14 +48,14 @@ jobs:
         run: |
           HARBOR_DIGEST="${{ steps.docker_build.outputs.digest }}"
           cd gitops-repo
-          sed -i "s|digest:.*|digest:  \"$HARBOR_DIGEST\"|g" modules/creative-studio/values-dev.cue
-          sed -i 's/tag:  *".*"/tag:  ""/g' modules/creative-studio/values-dev.cue
+          sed -i "s|digest:.*|digest:  \"$HARBOR_DIGEST\"|g" modules/creative-studio/values-beta.cue
+          sed -i 's/tag:  *".*"/tag:  ""/g' modules/creative-studio/values-beta.cue
           
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add modules/creative-studio/values-dev.cue
+          git add modules/creative-studio/values-beta.cue
           
           if ! git diff --staged --quiet; then
-            git commit -m "chore(dev): update image digest to $HARBOR_DIGEST"
+            git commit -m "chore(beta): update image digest to $HARBOR_DIGEST"
             git push
           fi
