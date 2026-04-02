@@ -225,7 +225,7 @@ export default function UploadVideo() {
               ? "Drop your video here!"
               : "Start by uploading a video"}
           </p>
-          <p className="text-muted-foreground">Supported Format: .mp4</p>
+          <p className="text-muted-foreground">Supported Format: .mp4(Enjoy....)</p>
         </div>
       </CardContent>
     </Card>
