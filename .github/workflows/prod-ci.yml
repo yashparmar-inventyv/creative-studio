@@ -1,30 +1,37 @@
-name: CI/CD Pipeline (Doctor App → Harbor → Timoni)
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [ "prod", "beta", "dev" ]
-
-env:
-  REGISTRY: 13.200.24.3
-  IMAGE_TAG: ${{ github.sha }}
+    # Trigger workflow on these branches
+    branches:
+      - prod
+      - beta
+      - dev
 
 jobs:
-  build-push-update:
-    runs-on: ubuntu-latest
+  build-and-deploy:
+    runs-on: self-hosted
 
     steps:
-      # 📥 Checkout App Repo
-      - name: Checkout App Repo
+      # 📥 Checkout Project Code
+      - name: Checkout Project Code
         uses: actions/checkout@v4
 
-      # 🌍 Set Environment Name
+      # 🌍 Set Environment Variables
       - name: Set Environment Variables
         run: |
+          # Store branch name (prod, beta, dev)
           echo "ENV_NAME=${{ github.ref_name }}" >> $GITHUB_ENV
 
       # 🔧 Setup Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: image=moby/buildkit:master
+          config-inline: |
+            [registry."13.200.24.3"]
+              http = true
+              insecure = true
 
       # 🔐 Login to Harbor
       - name: Login to Harbor
@@ -34,113 +41,49 @@ jobs:
           username: ${{ secrets.HARBOR_USERNAME }}
           password: ${{ secrets.HARBOR_PASSWORD }}
 
-      # =========================
-      # 🏗 BUILD & PUSH IMAGES
-      # =========================
-
-      # 🔹 FRONTEND
-      - name: Build & Push Frontend
-        id: frontend
+      # 🏗 Build & Push Image
+      - name: Build and Push to Harbor
+        id: docker_build
         uses: docker/build-push-action@v5
         with:
-          context: ./frontend
-          file: ./frontend/Dockerfile.frontend
+          context: .
           push: true
           tags: |
-            13.200.24.3/doctor/frontend-${{ env.ENV_NAME }}:${{ env.IMAGE_TAG }}
-            13.200.24.3/doctor/frontend-${{ env.ENV_NAME }}:latest
+            13.200.24.3/creative-studio-app/creative-studio-${{ env.ENV_NAME }}:${{ github.sha }}
+            13.200.24.3/creative-studio-app/creative-studio-${{ env.ENV_NAME }}:latest
 
-      # 🔹 BACKEND
-      - name: Build & Push Backend
-        id: backend
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile.backend
-          push: true
-          tags: |
-            13.200.24.3/doctor/backend-${{ env.ENV_NAME }}:${{ env.IMAGE_TAG }}
-            13.200.24.3/doctor/backend-${{ env.ENV_NAME }}:latest
-
-      # 🔹 ADMIN
-      - name: Build & Push Admin
-        id: admin
-        uses: docker/build-push-action@v5
-        with:
-          context: ./admin
-          file: ./admin/Dockerfile.admin
-          push: true
-          tags: |
-            13.200.24.3/doctor/admin-${{ env.ENV_NAME }}:${{ env.IMAGE_TAG }}
-            13.200.24.3/doctor/admin-${{ env.ENV_NAME }}:latest
-
-      # =========================
-      # 📦 EXPORT DIGESTS
-      # =========================
-
-      - name: Export Digests
-        run: |
-          echo "FRONTEND_DIGEST=${{ steps.frontend.outputs.digest }}" >> $GITHUB_ENV
-          echo "BACKEND_DIGEST=${{ steps.backend.outputs.digest }}" >> $GITHUB_ENV
-          echo "ADMIN_DIGEST=${{ steps.admin.outputs.digest }}" >> $GITHUB_ENV
-
-      # =========================
       # 📥 Checkout GitOps Repo
-      # =========================
-
       - name: Checkout GitOps Repo
         uses: actions/checkout@v4
         with:
-          repository: yashparmar25/Doctor-Timoni
-          token: ${{ secrets.GITOPS_TOKEN }}
+          repository: yashparmar-inventyv/Timoni-creative-studio
+          token: ${{ secrets.GITOPS_REPO_TOKEN }}
           path: gitops-repo
 
-      # =========================
-      # ✏️ UPDATE DIGESTS
-      # =========================
-
+      # ✏️ Update Digest in Timoni Values
       - name: Update Digest in Timoni Values
         run: |
+          HARBOR_DIGEST="${{ steps.docker_build.outputs.digest }}"
+          echo "The Harbor Digest is: $HARBOR_DIGEST"
+
           cd gitops-repo
 
-          TARGET_FILE="values-${{ env.ENV_NAME }}.cue"
+          # Dynamic target file
+          TARGET_FILE="modules/creative-studio/values-${{ env.ENV_NAME }}.cue"
 
-          echo "Updating $TARGET_FILE"
+          # Update digest and clear tag
+          sed -i "s|digest:.*|digest: \"$HARBOR_DIGEST\"|g" $TARGET_FILE
+          sed -i 's/tag: *".*"/tag: ""/g' $TARGET_FILE
 
-          # 🔹 FRONTEND
-          sed -i "/frontend:/,/}/ s|repository:.*|repository: \"13.200.24.3/doctor/frontend-${{ env.ENV_NAME }}\"|g" $TARGET_FILE
-          sed -i "/frontend:/,/}/ s|digest:.*|digest: \"${FRONTEND_DIGEST}\"|g" $TARGET_FILE
-          sed -i "/frontend:/,/}/ s|tag:.*|tag: \"\"|g" $TARGET_FILE
-
-          # 🔹 BACKEND
-          sed -i "/backend:/,/}/ s|repository:.*|repository: \"13.200.24.3/doctor/backend-${{ env.ENV_NAME }}\"|g" $TARGET_FILE
-          sed -i "/backend:/,/}/ s|digest:.*|digest: \"${BACKEND_DIGEST}\"|g" $TARGET_FILE
-          sed -i "/backend:/,/}/ s|tag:.*|tag: \"\"|g" $TARGET_FILE
-
-          # 🔹 ADMIN
-          sed -i "/admin:/,/}/ s|repository:.*|repository: \"13.200.24.3/doctor/admin-${{ env.ENV_NAME }}\"|g" $TARGET_FILE
-          sed -i "/admin:/,/}/ s|digest:.*|digest: \"${ADMIN_DIGEST}\"|g" $TARGET_FILE
-          sed -i "/admin:/,/}/ s|tag:.*|tag: \"\"|g" $TARGET_FILE
-
-          echo "Preview:"
-          cat $TARGET_FILE
-
-      # =========================
-      # 📤 COMMIT & PUSH
-      # =========================
-
-      - name: Commit & Push Changes
-        run: |
-          cd gitops-repo
-
+          # Git config
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add .
+          git add $TARGET_FILE
 
           if git diff --staged --quiet; then
-            echo "No changes to commit"
+            echo "No changes to commit for $TARGET_FILE"
           else
-            git commit -m "chore(${{ env.ENV_NAME }}): doctor app digest update → ${{ env.IMAGE_TAG }}"
+            git commit -m "chore(${{ env.ENV_NAME }}): update image digest to $HARBOR_DIGEST"
             git push
           fi
